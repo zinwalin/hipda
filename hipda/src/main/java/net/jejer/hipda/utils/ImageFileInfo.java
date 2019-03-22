@@ -1,5 +1,7 @@
 package net.jejer.hipda.utils;
 
+import com.huantansheng.easyphotos.models.album.entity.Photo;
+
 /**
  * simple bean for selected image file
  * Created by GreenSkinMonster on 2015-04-14.
@@ -11,6 +13,16 @@ public class ImageFileInfo {
     private String mime;
     private int width;
     private int height;
+    private boolean original;
+
+    public ImageFileInfo(Photo photo) {
+        filePath = photo.path;
+        fileSize = photo.size;
+        mime = photo.type;
+        width = photo.width;
+        height = photo.height;
+        original = photo.selectedOriginal;
+    }
 
     public String getFilePath() {
         return filePath;
@@ -64,6 +76,14 @@ public class ImageFileInfo {
 
     public void setHeight(int height) {
         this.height = height;
+    }
+
+    public boolean isOriginal() {
+        return original;
+    }
+
+    public void setOriginal(boolean original) {
+        this.original = original;
     }
 
     public boolean isGif() {

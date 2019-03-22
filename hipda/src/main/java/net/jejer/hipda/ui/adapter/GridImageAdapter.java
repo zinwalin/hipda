@@ -50,7 +50,7 @@ public class GridImageAdapter extends BaseAdapter {
         } else {
             squareLayout = convertView;
         }
-        ImageView imageView = (ImageView) squareLayout.findViewById(R.id.image);
+        ImageView imageView = squareLayout.findViewById(R.id.image);
         imageView.setImageBitmap(image.getThumb());
         imageView.setTag(image.getImgId());
         squareLayout.setTag(image.getImgId());

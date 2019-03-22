@@ -1,28 +1,27 @@
 package net.jejer.hipda.async;
 
-import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Bitmap.CompressFormat;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.media.ThumbnailUtils;
-import android.net.Uri;
-import android.provider.MediaStore;
 import android.text.TextUtils;
+
+import com.bumptech.glide.Glide;
 
 import net.jejer.hipda.bean.HiSettingsHelper;
 import net.jejer.hipda.okhttp.OkHttpHelper;
-import net.jejer.hipda.utils.CursorUtils;
+import net.jejer.hipda.ui.HiApplication;
 import net.jejer.hipda.utils.HiUtils;
 import net.jejer.hipda.utils.ImageFileInfo;
 import net.jejer.hipda.utils.Logger;
 import net.jejer.hipda.utils.Utils;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
@@ -46,9 +45,7 @@ public class UploadImgHelper {
 
     private String mUid;
     private String mHash;
-    private Context mCtx;
-    private Uri[] mUris;
-    private boolean mOriginal;
+    private Collection<ImageFileInfo> mPhotos;
 
     private String mMessage = "";
     private String mDetail = "";
@@ -57,13 +54,11 @@ public class UploadImgHelper {
     private int mCurrent;
     private String mCurrentFileName = "";
 
-    public UploadImgHelper(Context ctx, UploadImgListener v, String uid, String hash, Uri[] uris, boolean original) {
-        mCtx = ctx;
+    public UploadImgHelper(UploadImgListener v, String uid, String hash, Collection<ImageFileInfo> photos) {
         mListener = v;
         mUid = uid;
         mHash = hash;
-        mUris = uris;
-        mOriginal = original;
+        mPhotos = photos;
 
         int maxUploadSize = HiSettingsHelper.getInstance().getMaxUploadFileSize();
         if (maxUploadSize > 0 && mMaxImageFileSize > maxUploadSize) {
@@ -75,7 +70,7 @@ public class UploadImgHelper {
     public interface UploadImgListener {
         void updateProgress(int total, int current, int percentage);
 
-        void itemComplete(Uri uri, int total, int current, String currentFileName, String message, String detail, String imgId, Bitmap thumbtail);
+        void itemComplete(String uri, int total, int current, String currentFileName, String message, String detail, String imgId, Bitmap thumbnail);
     }
 
     public void upload() {
@@ -84,28 +79,27 @@ public class UploadImgHelper {
         post_param.put("uid", mUid);
         post_param.put("hash", mHash);
 
-        mTotal = mUris.length;
+        mTotal = mPhotos.size();
 
         int i = 0;
-        for (Uri uri : mUris) {
+        for (ImageFileInfo photo : mPhotos) {
             mCurrent = i++;
             mListener.updateProgress(mTotal, mCurrent, -1);
-            String imgId = uploadImage(HiUtils.UploadImgUrl, post_param, uri);
-            mListener.itemComplete(uri, mTotal, mCurrent, mCurrentFileName, mMessage, mDetail, imgId, mThumb);
+            String imgId = uploadImage(HiUtils.UploadImgUrl, post_param, photo);
+            mListener.itemComplete(photo.getFilePath(), mTotal, mCurrent, mCurrentFileName, mMessage, mDetail, imgId, mThumb);
         }
     }
 
-    private String uploadImage(String urlStr, Map<String, String> param, Uri uri) {
-        mThumb = null;
+    private String uploadImage(String urlStr, Map<String, String> param, ImageFileInfo imageFileInfo) {
         mMessage = "";
         mCurrentFileName = "";
 
-        ImageFileInfo imageFileInfo = CursorUtils.getImageFileInfo(mCtx, uri);
         mCurrentFileName = imageFileInfo.getFileName();
 
-        ByteArrayOutputStream baos = getImageStream(uri, imageFileInfo);
+        ByteArrayOutputStream baos = getImageStream(imageFileInfo);
         if (baos == null) {
-            mMessage = "处理图片发生错误";
+            if (TextUtils.isEmpty(mMessage))
+                mMessage = "处理图片发生错误";
             return null;
         }
 
@@ -166,37 +160,26 @@ public class UploadImgHelper {
         return imgId;
     }
 
-    private ByteArrayOutputStream getImageStream(Uri uri, ImageFileInfo imageFileInfo) {
+    private ByteArrayOutputStream getImageStream(ImageFileInfo imageFileInfo) {
         if (imageFileInfo.isGif()
                 && imageFileInfo.getFileSize() > HiSettingsHelper.getInstance().getMaxUploadFileSize()) {
-            mMessage = "GIF图片大小不能超过" + Utils.toSizeText(HiSettingsHelper.getInstance().getMaxUploadFileSize());
-            return null;
-        }
-
-        Bitmap bitmap;
-        try {
-            bitmap = MediaStore.Images.Media.getBitmap(mCtx.getContentResolver(), uri);
-        } catch (Exception e) {
-            mMessage = "无法获取图片 : " + e.getMessage();
+            mMessage = "GIF图片大小不能超过 " + Utils.toSizeText(HiSettingsHelper.getInstance().getMaxUploadFileSize());
             return null;
         }
 
         //gif or very long/wide image or small image or filePath is null
         if (isDirectUploadable(imageFileInfo)) {
-            mThumb = ThumbnailUtils.extractThumbnail(bitmap, THUMB_SIZE, THUMB_SIZE);
-            bitmap.recycle();
+            mThumb = getThumbnail(imageFileInfo.getFilePath());
             return readFileToStream(imageFileInfo.getFilePath());
         }
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        bitmap.compress(CompressFormat.JPEG, MAX_QUALITY, baos);
-        bitmap.recycle();
-        bitmap = null;
+        return compressFile(imageFileInfo);
+    }
 
-        ByteArrayInputStream isBm = new ByteArrayInputStream(baos.toByteArray());
+    private ByteArrayOutputStream compressFile(ImageFileInfo imageFileInfo) {
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inJustDecodeBounds = true;
-        BitmapFactory.decodeStream(isBm, null, opts);
+        BitmapFactory.decodeFile(imageFileInfo.getFilePath(), opts);
 
         int width = opts.outWidth;
         int height = opts.outHeight;
@@ -209,8 +192,7 @@ public class UploadImgHelper {
         newOpts.inJustDecodeBounds = false;
         newOpts.inSampleSize = be;
 
-        isBm = new ByteArrayInputStream(baos.toByteArray());
-        Bitmap newbitmap = BitmapFactory.decodeStream(isBm, null, newOpts);
+        Bitmap newbitmap = BitmapFactory.decodeFile(imageFileInfo.getFilePath(), newOpts);
 
         width = newbitmap.getWidth();
         height = newbitmap.getHeight();
@@ -239,8 +221,8 @@ public class UploadImgHelper {
         }
 
         int quality = MAX_QUALITY;
-        baos.reset();
-        newbitmap.compress(CompressFormat.JPEG, quality, baos);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        newbitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos);
         while (baos.size() > mMaxImageFileSize) {
             quality -= 10;
             if (quality <= 50) {
@@ -248,7 +230,7 @@ public class UploadImgHelper {
                 return null;
             }
             baos.reset();
-            newbitmap.compress(CompressFormat.JPEG, quality, baos);
+            newbitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos);
         }
 
         mThumb = ThumbnailUtils.extractThumbnail(newbitmap, THUMB_SIZE, THUMB_SIZE);
@@ -259,17 +241,16 @@ public class UploadImgHelper {
     }
 
     private boolean isDirectUploadable(ImageFileInfo imageFileInfo) {
-        if (mOriginal)
+        if (imageFileInfo.isOriginal())
             return true;
 
         long fileSize = imageFileInfo.getFileSize();
         int w = imageFileInfo.getWidth();
         int h = imageFileInfo.getHeight();
 
-        if (TextUtils.isEmpty(imageFileInfo.getFilePath()))
-            return false;
-
-        if (imageFileInfo.getOrientation() > 0)
+        int orientation = getOrientationFromExif(imageFileInfo.getFilePath());
+        imageFileInfo.setOrientation(orientation);
+        if (orientation > 0)
             return false;
 
         //gif image
@@ -307,6 +288,42 @@ public class UploadImgHelper {
 
             }
         }
+    }
+
+    private static int getOrientationFromExif(String path) {
+        int orientation = -1;
+        try {
+            ExifInterface exif = new ExifInterface(path);
+            String orientString = exif.getAttribute(ExifInterface.TAG_ORIENTATION);
+            orientation = orientString != null ? Integer.parseInt(orientString) : ExifInterface.ORIENTATION_NORMAL;
+
+            switch (orientation) {
+                case ExifInterface.ORIENTATION_ROTATE_90:
+                    orientation = 90;
+                case ExifInterface.ORIENTATION_ROTATE_180:
+                    orientation = 180;
+                case ExifInterface.ORIENTATION_ROTATE_270:
+                    orientation = 270;
+            }
+        } catch (Exception e) {
+            Logger.e(e);
+        }
+        return orientation;
+    }
+
+    private static Bitmap getThumbnail(String filepath) {
+        try {
+            return Glide.with(HiApplication.getAppContext())
+                    .asBitmap()
+                    .load(filepath)
+                    .centerCrop()
+                    .override(THUMB_SIZE, THUMB_SIZE)
+                    .submit()
+                    .get();
+        } catch (Exception e) {
+            Logger.e(e);
+        }
+        return null;
     }
 
 }

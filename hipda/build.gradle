@@ -92,9 +92,7 @@ dependencies {
         exclude group: 'org.json', module: 'json'
     }
 
-    //implementation 'com.zhihu.android:matisse:0.5.2-beta4'
-    implementation 'it.sephiroth.android.library.imagezoom:library:1.0.4'
-    implementation(name: 'matisse-release-0.5.2-beta4', ext: 'aar')
+    implementation 'com.github.HuanTanSheng:EasyPhotos:2.4.0'
 
     //implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation(name: 'calligraphy-release-2.3.0', ext: 'aar')

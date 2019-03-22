@@ -6,10 +6,8 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
@@ -32,14 +30,13 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import com.google.android.material.snackbar.Snackbar;
+import com.huantansheng.easyphotos.EasyPhotos;
+import com.huantansheng.easyphotos.models.album.entity.Photo;
 import com.mikepenz.fontawesome_typeface_library.FontAwesome;
 import com.mikepenz.google_material_typeface_library.GoogleMaterial;
 import com.mikepenz.iconics.IconicsDrawable;
 import com.vanniktech.emoji.EmojiEditText;
 import com.vdurmont.emoji.EmojiParser;
-import com.zhihu.matisse.Matisse;
-import com.zhihu.matisse.MimeType;
-import com.zhihu.matisse.internal.entity.CaptureStrategy;
 
 import net.jejer.hipda.BuildConfig;
 import net.jejer.hipda.R;
@@ -51,7 +48,7 @@ import net.jejer.hipda.bean.PostBean;
 import net.jejer.hipda.bean.PrePostInfoBean;
 import net.jejer.hipda.db.Content;
 import net.jejer.hipda.db.ContentDao;
-import net.jejer.hipda.glide.MatisseGlideEngine;
+import net.jejer.hipda.glide.EasyPhotosGlideEngine;
 import net.jejer.hipda.job.ImageUploadEvent;
 import net.jejer.hipda.job.ImageUploadJob;
 import net.jejer.hipda.job.JobMgr;
@@ -66,6 +63,7 @@ import net.jejer.hipda.ui.widget.OnSingleClickListener;
 import net.jejer.hipda.ui.widget.OnViewItemSingleClickListener;
 import net.jejer.hipda.utils.HiUtils;
 import net.jejer.hipda.utils.HtmlCompat;
+import net.jejer.hipda.utils.ImageFileInfo;
 import net.jejer.hipda.utils.UIUtils;
 import net.jejer.hipda.utils.Utils;
 
@@ -75,6 +73,7 @@ import org.greenrobot.eventbus.ThreadMode;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,7 +128,7 @@ public class PostFragment extends BaseFragment {
     private GridImageAdapter mImageAdapter;
     private HiProgressDialog mProgressDialog;
     private boolean mImageUploading = false;
-    private Map<Uri, UploadImage> mUploadImages = new LinkedHashMap<>();
+    private Map<String, UploadImage> mUploadImages = new LinkedHashMap<>();
     private long mLastSavedTime = -1;
     private boolean mDeleteMode = false;
 
@@ -423,20 +422,17 @@ public class PostFragment extends BaseFragment {
 
     protected void showImageSelector() {
         mContentPosition = mEtContent.getSelectionStart();
+        boolean showCamera = ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED;
 
-        Matisse.from(PostFragment.this)
-                .choose(MimeType.ofImage())
-                .countable(true)
-                .maxSelectable(9)
-                .restrictOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
-                .thumbnailScale(0.85f)
-                .originalEnable(true)
-                .maxOriginalSize(HiSettingsHelper.getInstance().getMaxUploadFileSize() / 1024 / 1024)
-                .imageEngine(new MatisseGlideEngine())
-                .theme(HiSettingsHelper.getInstance().getImageActivityTheme(getActivity()))
-                .capture(ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-                .captureStrategy(new CaptureStrategy(false, BuildConfig.APPLICATION_ID + ".provider"))
-                .forResult(SELECT_PICTURE);
+        EasyPhotos.createAlbum(this, showCamera, EasyPhotosGlideEngine.getInstance())
+                .setFileProviderAuthority(BuildConfig.APPLICATION_ID + ".provider")
+                .setPuzzleMenu(false)
+                .setCleanMenu(false)
+                .setVideo(false)
+                .setOriginalMenu(false, true, "")
+                .setCount(9)
+                .start(SELECT_PICTURE);
     }
 
     private void postReply() {
@@ -549,20 +545,17 @@ public class PostFragment extends BaseFragment {
             return;
         }
         mImageUploading = true;
-        (new Handler()).postDelayed(new Runnable() {
-            public void run() {
-                mImageUploading = false;
-            }
-        }, 2000);
+        (new Handler()).postDelayed(() -> mImageUploading = false, 2000);
 
         if (resultCode == Activity.RESULT_OK && requestCode == SELECT_PICTURE) {
             boolean duplicate = false;
-            Collection<Uri> uris = new ArrayList<>();
+            Map<String, ImageFileInfo> uris = new HashMap<>();
 
-            List<Uri> selects = Matisse.obtainResult(intent);
-            for (Uri uri : selects) {
-                if (!mUploadImages.containsKey(uri)) {
-                    uris.add(uri);
+            List<Photo> resultPhotos = intent.getParcelableArrayListExtra(EasyPhotos.RESULT_PHOTOS);
+
+            for (Photo photo : resultPhotos) {
+                if (!mUploadImages.containsKey(photo.path)) {
+                    uris.put(photo.path, new ImageFileInfo(photo));
                 } else {
                     duplicate = true;
                 }
@@ -577,10 +570,9 @@ public class PostFragment extends BaseFragment {
                 return;
             }
 
-            boolean original = Matisse.obtainOriginalState(intent);
             mProgressDialog = HiProgressDialog.show(getActivity(), "正在上传...");
             if (mPrePostInfo != null) {
-                JobMgr.addJob(new ImageUploadJob(mSessionId, mPrePostInfo.getUid(), mPrePostInfo.getHash(), uris.toArray(new Uri[0]), original));
+                JobMgr.addJob(new ImageUploadJob(mSessionId, mPrePostInfo.getUid(), mPrePostInfo.getHash(), uris.values()));
             } else {
                 UIUtils.toast("无法获取发帖信息");
             }
@@ -841,7 +833,7 @@ public class PostFragment extends BaseFragment {
         final LayoutInflater inflater = (LayoutInflater) getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         final View viewlayout = inflater.inflate(R.layout.dialog_images, null);
 
-        final GridView gridView = (GridView) viewlayout.findViewById(R.id.gv_images);
+        final GridView gridView = viewlayout.findViewById(R.id.gv_images);
 
         gridView.setAdapter(mImageAdapter);
 
@@ -867,7 +859,7 @@ public class PostFragment extends BaseFragment {
 
     private void imageDone(ImageUploadEvent event) {
         UploadImage image = event.mImage;
-        mUploadImages.put(image.getUri(), image);
+        mUploadImages.put(image.getPath(), image);
         if (isValidImgId(image.getImgId())) {
             mEmojiPopup.addImage(image.getImgId(), image.getThumb());
             appendImage(image.getImgId());

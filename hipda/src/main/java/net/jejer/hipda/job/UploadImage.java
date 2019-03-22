@@ -1,7 +1,6 @@
 package net.jejer.hipda.job;
 
 import android.graphics.Bitmap;
-import android.net.Uri;
 
 /**
  * Created by GreenSkinMonster on 2016-04-13.
@@ -9,7 +8,7 @@ import android.net.Uri;
 public class UploadImage {
 
     private String mImgId;
-    private Uri mUri;
+    private String mPath;
     private String mFileName;
     private Bitmap mThumb;
     private int mStatus;
@@ -31,6 +30,14 @@ public class UploadImage {
         mImgId = imgId;
     }
 
+    public String getPath() {
+        return mPath;
+    }
+
+    public void setPath(String path) {
+        mPath = path;
+    }
+
     public int getStatus() {
         return mStatus;
     }
@@ -45,14 +52,6 @@ public class UploadImage {
 
     public void setThumb(Bitmap thumb) {
         mThumb = thumb;
-    }
-
-    public Uri getUri() {
-        return mUri;
-    }
-
-    public void setUri(Uri uri) {
-        mUri = uri;
     }
 
     public String getMessage() {

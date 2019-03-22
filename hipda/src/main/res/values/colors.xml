@@ -53,4 +53,8 @@
         <item>@color/md_grey_200</item>
     </array>
 
+    <color name="colorPrimaryDark">@color/md_grey_900</color>
+    <color name="easy_photos_bar_primary">@color/md_grey_900</color>
+    <color name="easy_photos_bar_primary_dark">@color/md_grey_900</color>
+
 </resources>

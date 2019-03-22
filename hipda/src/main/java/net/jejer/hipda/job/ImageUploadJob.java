@@ -1,10 +1,10 @@
 package net.jejer.hipda.job;
 
 import android.graphics.Bitmap;
-import android.net.Uri;
 
 import net.jejer.hipda.async.UploadImgHelper;
 import net.jejer.hipda.ui.HiApplication;
+import net.jejer.hipda.utils.ImageFileInfo;
 
 import org.greenrobot.eventbus.EventBus;
 
@@ -18,16 +18,14 @@ public class ImageUploadJob extends BaseJob implements UploadImgHelper.UploadImg
 
     private String mUid;
     private String mHash;
-    private Uri[] mUris;
-    private boolean mOriginal;
+    private Collection<ImageFileInfo> mPhotos;
     private Collection<ImageUploadEvent> mHoldEvents = new ArrayList<>();
 
-    public ImageUploadJob(String sessionId, String uid, String hash, Uri[] uris, boolean original) {
+    public ImageUploadJob(String sessionId, String uid, String hash, Collection<ImageFileInfo> photos) {
         super(sessionId);
         mUid = uid;
         mHash = hash;
-        mUris = uris;
-        mOriginal = original;
+        mPhotos = photos;
     }
 
     @Override
@@ -37,7 +35,7 @@ public class ImageUploadJob extends BaseJob implements UploadImgHelper.UploadImg
 
     @Override
     public void onRun() throws Throwable {
-        new UploadImgHelper(getApplicationContext(), this, mUid, mHash, mUris, mOriginal).upload();
+        new UploadImgHelper(this, mUid, mHash, mPhotos).upload();
 
         ImageUploadEvent event = new ImageUploadEvent();
         event.mSessionId = mSessionId;
@@ -58,12 +56,12 @@ public class ImageUploadJob extends BaseJob implements UploadImgHelper.UploadImg
     }
 
     @Override
-    public void itemComplete(Uri uri, int total, int current, String currentFileName, String message, String detail, String imgId, Bitmap thumbtail) {
+    public void itemComplete(String uri, int total, int current, String currentFileName, String message, String detail, String imgId, Bitmap thumbtail) {
         UploadImage image = new UploadImage();
         image.setFileName(currentFileName);
         image.setImgId(imgId);
+        image.setPath(uri);
         image.setThumb(thumbtail);
-        image.setUri(uri);
 
         ImageUploadEvent event = new ImageUploadEvent();
         event.mSessionId = mSessionId;

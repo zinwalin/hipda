@@ -64,6 +64,9 @@
 -dontwarn com.squareup.picasso.**
 -dontwarn com.zhihu.matisse.**
 
+#EasyPhotos
+-keep class com.huantansheng.easyphotos.models.** { *; }
+
 #evernote android job
 -dontwarn com.evernote.android.job.gcm.**
 -dontwarn com.evernote.android.job.util.GcmAvailableHelper

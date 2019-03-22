@@ -1,7 +1,6 @@
 package net.jejer.hipda.bean;
 
 import android.annotation.SuppressLint;
-import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
@@ -1053,15 +1052,6 @@ public class HiSettingsHelper {
 
     public int getToolbarTextColor() {
         return isWhiteTheme() ? Color.BLACK : Color.WHITE;
-    }
-
-    public int getImageActivityTheme(Activity activity) {
-        if (isWhiteTheme()) {
-            return R.style.Matisse_Zhihu;
-        }
-        return HiUtils.getThemeValue(activity,
-                HiSettingsHelper.getInstance().getActiveTheme(),
-                HiSettingsHelper.getInstance().getPrimaryColor());
     }
 
     public String getSilentBegin() {
