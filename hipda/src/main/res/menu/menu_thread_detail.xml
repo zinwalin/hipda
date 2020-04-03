@@ -37,5 +37,8 @@
     <item
         android:id="@+id/action_share_thread"
         android:title="@string/action_share"/>
+    <item
+        android:id="@+id/action_download_all_images"
+        android:title="@string/action_download_all_images"/>
 
 </menu>

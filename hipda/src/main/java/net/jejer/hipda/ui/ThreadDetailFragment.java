@@ -478,6 +478,13 @@ public class ThreadDetailFragment extends BaseFragment {
                 sharingIntent.putExtra(android.content.Intent.EXTRA_TEXT, shareBody);
                 startActivity(Intent.createChooser(sharingIntent, "分享帖子"));
                 return true;
+            case R.id.action_download_all_images:
+                ArrayList<ContentImg> mImages = this.getImagesInPage(mCurrentPage);
+                for (int i = 0; i < mImages.size(); i++) {
+                    UIUtils.saveImage(getActivity(), UIUtils.getSnackView(getActivity()), mImages.get(i).getContent());
+                }
+                UIUtils.toast("准备下载所有图片");
+                return true;
             case R.id.action_reply:
                 showPost("");
                 return true;
